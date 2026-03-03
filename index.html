@@ -102,7 +102,7 @@
 
   <!-- オーナーモード -->
   <div id="screen-owner" class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 p-4 hidden">
-    <div class="max-w-2xl mx-auto pt-6">
+    <div id="owner-content" class="max-w-2xl mx-auto pt-6 transition-opacity duration-300">
 
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-bold text-slate-800">🔧 オーナーモード</h1>
@@ -343,7 +343,12 @@
 
     // ====== オーナーモード ======
 
-    function openOwnerMode() {
+    async function openOwnerMode() {
+      showScreen('owner');
+      document.getElementById('owner-content').style.opacity = '0.5';
+      // サーバーから最新データ取得
+      await fetchRecordsFromServer();
+      document.getElementById('owner-content').style.opacity = '1';
       selectedMonthIndex = 0;
       buildAvailableMonths();
       // デフォルトを今月にする（あれば）
@@ -351,7 +356,6 @@
       const thisMonth = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0');
       const idx = availableMonths.indexOf(thisMonth);
       if (idx >= 0) selectedMonthIndex = idx;
-      showScreen('owner');
       refreshOwner();
     }
 
