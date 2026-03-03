@@ -673,14 +673,15 @@
     function renderSummary() {
       const records = getFilteredRecords();
       const totalSales = records.reduce((s, r) => s + (r.合計金額 || 0), 0);
-      const totalCount = records.length;
-
-      // 客単価
-      const avgPerPerson = totalCount > 0 ? Math.round(totalSales / totalCount) : 0;
+      const txCount = records.length; // 購入回数（トランザクション数）
 
       const priceBreakdown = {};
       prices.forEach(p => priceBreakdown[p] = 0);
       records.forEach(r => { prices.forEach(p => { priceBreakdown[p] += (r[p + '円'] || 0); }); });
+      const totalItems = prices.reduce((s, p) => s + priceBreakdown[p], 0); // アイテム総数
+
+      // 客単価（1回あたり）
+      const avgPerTx = txCount > 0 ? Math.round(totalSales / txCount) : 0;
 
       // 所属別集計
       const byDept = {};
@@ -722,12 +723,12 @@
           <p class="text-2xl font-bold text-amber-800">${totalSales.toLocaleString()}円</p>
         </div>
         <div class="bg-amber-50 rounded-xl p-3 text-center">
-          <p class="text-sm text-slate-500">購入件数</p>
-          <p class="text-2xl font-bold text-amber-800">${totalCount}件</p>
+          <p class="text-sm text-slate-500">販売個数</p>
+          <p class="text-2xl font-bold text-amber-800">${totalItems}個</p>
         </div>
         <div class="bg-blue-50 rounded-xl p-3 text-center">
-          <p class="text-sm text-slate-500">平均客単価</p>
-          <p class="text-2xl font-bold text-blue-800">${avgPerPerson.toLocaleString()}円</p>
+          <p class="text-sm text-slate-500">購入回数</p>
+          <p class="text-2xl font-bold text-blue-800">${txCount}回</p>
         </div>
         <div class="bg-blue-50 rounded-xl p-3 text-center">
           <p class="text-sm text-slate-500">購入者数</p>
