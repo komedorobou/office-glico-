@@ -128,9 +128,8 @@
       </div>
 
       <!-- 操作ボタン -->
-      <div class="grid grid-cols-2 gap-3 mb-4">
-        <button id="btn-owner-export" class="p-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:bg-emerald-700 transition">📊 Excel出力</button>
-        <button id="btn-owner-clear" class="p-4 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 active:bg-red-700 transition">🗑 データクリア</button>
+      <div class="mb-4">
+        <button id="btn-owner-export" class="w-full p-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 active:bg-emerald-700 transition">📊 Excel出力</button>
       </div>
 
       <!-- 購入履歴 -->
@@ -495,30 +494,7 @@
       XLSX.writeFile(wb, 'グリコ購入記録_' + suffix + '.xlsx');
     });
 
-    // データクリア（選択中の月 or 全期間）
-    document.getElementById('btn-owner-clear').addEventListener('click', () => {
-      const label = availableMonths[selectedMonthIndex] || '全期間';
-      const filtered = getFilteredRecords();
-      if (filtered.length === 0) { alert('クリアするデータがありません'); return; }
-
-      const monthText = label === '全期間' ? '全期間' : label.replace('/', '年') + '月';
-      if (!confirm(monthText + ' の購入データ ' + filtered.length + '件 をすべて削除しますか？\nこの操作は取り消せません。\n\n※先にExcel出力することをおすすめします')) return;
-
-      if (label === '全期間') {
-        cachedRecords = [];
-        localStorage.removeItem('glico_records');
-        clearRecordsFromServer('');
-      } else {
-        const all = loadRecords();
-        const remaining = all.filter(r => !(r.日時 && r.日時.startsWith(label)));
-        saveRecords(remaining);
-        clearRecordsFromServer(label);
-      }
-      buildAvailableMonths();
-      selectedMonthIndex = 0;
-      refreshOwner();
-      alert('データをクリアしました');
-    });
+    // データクリア機能は削除済み
 
     // 戻る
     document.getElementById('btn-owner-exit').addEventListener('click', () => {
