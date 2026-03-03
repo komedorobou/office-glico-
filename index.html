@@ -115,6 +115,24 @@
         <button id="btn-owner-exit" class="px-4 py-2 bg-slate-500 text-white font-bold rounded-xl hover:bg-slate-600 transition text-sm">戻る</button>
       </div>
 
+      <!-- 今日の売上（トップ） -->
+      <div id="today-summary" class="bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl shadow-lg p-5 mb-4 text-white">
+        <p class="text-sm opacity-80 mb-1">📅 今日の売上</p>
+        <div class="flex items-end justify-between">
+          <div>
+            <p id="today-sales" class="text-3xl font-bold">0円</p>
+            <p id="today-count" class="text-sm opacity-80 mt-1">0件</p>
+          </div>
+          <div id="today-compare" class="text-right text-sm opacity-90"></div>
+        </div>
+      </div>
+
+      <!-- 日別推移グラフ -->
+      <div class="bg-white rounded-2xl shadow-lg p-5 mb-4">
+        <h2 class="font-bold text-slate-700 mb-3 text-lg">📊 日別売上推移</h2>
+        <div id="daily-chart" class="overflow-x-auto" style="height: 160px;"></div>
+      </div>
+
       <!-- 月選択 -->
       <div class="bg-white rounded-2xl shadow-lg p-4 mb-4">
         <div class="flex items-center justify-between">
@@ -365,6 +383,8 @@
     }
 
     function refreshOwner() {
+      renderToday();
+      renderDailyChart();
       updateMonthLabel();
       renderSummary();
       renderHistory();
@@ -385,14 +405,89 @@
     });
 
     // 売上サマリー
+    // 今日の売上を表示
+    function renderToday() {
+      const allRecords = loadRecords();
+      const now = new Date();
+      const todayStr = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0');
+      const todayRecords = allRecords.filter(r => r.日時 && r.日時.startsWith(todayStr));
+      const todaySales = todayRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
+      const todayCount = todayRecords.length;
+
+      document.getElementById('today-sales').textContent = todaySales.toLocaleString() + '円';
+      document.getElementById('today-count').textContent = todayCount + '件の購入';
+
+      // 昨日との比較
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yStr = yesterday.getFullYear() + '/' + String(yesterday.getMonth()+1).padStart(2,'0') + '/' + String(yesterday.getDate()).padStart(2,'0');
+      const yRecords = allRecords.filter(r => r.日時 && r.日時.startsWith(yStr));
+      const ySales = yRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
+
+      const compareEl = document.getElementById('today-compare');
+      if (ySales > 0) {
+        const diff = todaySales - ySales;
+        const pct = Math.round((diff / ySales) * 100);
+        const arrow = diff >= 0 ? '↑' : '↓';
+        compareEl.innerHTML = `<p>前日比</p><p class="text-lg font-bold">${arrow} ${Math.abs(pct)}%</p><p class="text-xs opacity-70">昨日: ${ySales.toLocaleString()}円</p>`;
+      } else {
+        compareEl.innerHTML = '<p class="text-xs opacity-70">昨日のデータなし</p>';
+      }
+    }
+
+    // 日別売上グラフ
+    function renderDailyChart() {
+      const records = getFilteredRecords();
+      const byDate = {};
+      records.forEach(r => {
+        if (r.日時) {
+          const date = r.日時.split(' ')[0]; // 2026/03/03
+          byDate[date] = (byDate[date] || 0) + (r.合計金額 || 0);
+        }
+      });
+      const dates = Object.keys(byDate).sort();
+      if (dates.length === 0) {
+        document.getElementById('daily-chart').innerHTML = '<p class="text-sm text-slate-400 text-center py-8">データなし</p>';
+        return;
+      }
+      const maxVal = Math.max(...Object.values(byDate), 1);
+      const barWidth = Math.max(36, Math.floor(600 / dates.length));
+
+      document.getElementById('daily-chart').innerHTML = `
+        <div style="display:flex;align-items:flex-end;gap:4px;height:140px;min-width:${dates.length * (barWidth + 4)}px;">
+          ${dates.map(d => {
+            const val = byDate[d];
+            const h = Math.max(4, Math.round((val / maxVal) * 110));
+            const parts = d.split('/');
+            const label = parseInt(parts[1]) + '/' + parseInt(parts[2]);
+            return `<div style="display:flex;flex-direction:column;align-items:center;width:${barWidth}px;flex-shrink:0;">
+              <span style="font-size:0.6rem;color:#64748b;margin-bottom:2px;">${val.toLocaleString()}</span>
+              <div style="width:${Math.min(barWidth - 4, 28)}px;height:${h}px;background:linear-gradient(to top,#10b981,#34d399);border-radius:4px 4px 0 0;"></div>
+              <span style="font-size:0.6rem;color:#94a3b8;margin-top:2px;">${label}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+    }
+
     function renderSummary() {
       const records = getFilteredRecords();
       const totalSales = records.reduce((s, r) => s + (r.合計金額 || 0), 0);
       const totalCount = records.length;
 
+      // 客単価
+      const avgPerPerson = totalCount > 0 ? Math.round(totalSales / totalCount) : 0;
+
       const priceBreakdown = {};
       prices.forEach(p => priceBreakdown[p] = 0);
       records.forEach(r => { prices.forEach(p => { priceBreakdown[p] += (r[p + '円'] || 0); }); });
+
+      // 所属別集計
+      const byDept = {};
+      records.forEach(r => {
+        const dept = r.所属 || '不明';
+        byDept[dept] = (byDept[dept] || 0) + (r.合計金額 || 0);
+      });
+      const topDepts = Object.entries(byDept).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
       const byPerson = {};
       records.forEach(r => {
@@ -400,6 +495,20 @@
         byPerson[key] = (byPerson[key] || 0) + (r.合計金額 || 0);
       });
       const topBuyers = Object.entries(byPerson).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+      // 時間帯別
+      const byHour = {};
+      records.forEach(r => {
+        if (r.日時) {
+          const timePart = r.日時.split(' ')[1];
+          if (timePart) {
+            const hour = parseInt(timePart.split(':')[0]);
+            const label = hour + '時台';
+            byHour[label] = (byHour[label] || 0) + 1;
+          }
+        }
+      });
+      const topHours = Object.entries(byHour).sort((a, b) => b[1] - a[1]).slice(0, 3);
 
       document.getElementById('summary-content').innerHTML = `
         <div class="bg-amber-50 rounded-xl p-3 text-center">
@@ -410,14 +519,37 @@
           <p class="text-sm text-slate-500">購入件数</p>
           <p class="text-2xl font-bold text-amber-800">${totalCount}件</p>
         </div>
+        <div class="bg-blue-50 rounded-xl p-3 text-center">
+          <p class="text-sm text-slate-500">平均客単価</p>
+          <p class="text-2xl font-bold text-blue-800">${avgPerPerson.toLocaleString()}円</p>
+        </div>
+        <div class="bg-blue-50 rounded-xl p-3 text-center">
+          <p class="text-sm text-slate-500">購入者数</p>
+          <p class="text-2xl font-bold text-blue-800">${Object.keys(byPerson).length}人</p>
+        </div>
         <div class="col-span-2 bg-slate-50 rounded-xl p-3">
-          <p class="text-sm text-slate-500 mb-2">価格帯別 個数</p>
+          <p class="text-sm text-slate-500 mb-2">🏷 価格帯別 個数</p>
           <div class="flex flex-wrap gap-2">
-            ${prices.map(p => `<span class="bg-white px-3 py-1 rounded-lg text-sm">${p}円: <b>${priceBreakdown[p]}個</b></span>`).join('')}
+            ${prices.map(p => `<span class="bg-white px-3 py-1 rounded-lg text-sm border">${p}円: <b>${priceBreakdown[p]}個</b></span>`).join('')}
           </div>
         </div>
         <div class="col-span-2 bg-slate-50 rounded-xl p-3">
-          <p class="text-sm text-slate-500 mb-2">購入額トップ5</p>
+          <p class="text-sm text-slate-500 mb-2">🕐 購入が多い時間帯</p>
+          ${topHours.length > 0 ? `<div class="flex flex-wrap gap-2">${topHours.map(h =>
+            `<span class="bg-white px-3 py-1 rounded-lg text-sm border">${h[0]}: <b>${h[1]}件</b></span>`
+          ).join('')}</div>` : '<p class="text-sm text-slate-400">データなし</p>'}
+        </div>
+        <div class="col-span-2 bg-slate-50 rounded-xl p-3">
+          <p class="text-sm text-slate-500 mb-2">🏢 所属別トップ5</p>
+          ${topDepts.length > 0 ? topDepts.map((d, i) =>
+            `<div class="flex justify-between py-1 ${i < topDepts.length - 1 ? 'border-b border-slate-200' : ''}">
+              <span class="text-sm">${i+1}. ${d[0]}</span>
+              <span class="text-sm font-bold">${d[1].toLocaleString()}円</span>
+            </div>`
+          ).join('') : '<p class="text-sm text-slate-400">データなし</p>'}
+        </div>
+        <div class="col-span-2 bg-slate-50 rounded-xl p-3">
+          <p class="text-sm text-slate-500 mb-2">👤 購入額トップ5</p>
           ${topBuyers.length > 0 ? topBuyers.map((b, i) =>
             `<div class="flex justify-between py-1 ${i < topBuyers.length - 1 ? 'border-b border-slate-200' : ''}">
               <span class="text-sm">${i+1}. ${b[0]}</span>
