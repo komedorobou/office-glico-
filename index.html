@@ -299,8 +299,9 @@
       const monthSet = new Set();
       records.forEach(r => {
         if (r.日時) {
-          const parts = r.日時.split('/');
-          if (parts.length >= 2) monthSet.add(parts[0] + '/' + parts[1]);
+          const d = getDatePart(r.日時);
+          const parts = d.split('/');
+          if (parts.length >= 2 && !isNaN(parseInt(parts[0]))) monthSet.add(parts[0] + '/' + parts[1]);
         }
       });
       const sorted = [...monthSet].sort().reverse();
@@ -312,7 +313,7 @@
       const records = loadRecords();
       const label = availableMonths[selectedMonthIndex];
       if (!label || label === '全期間') return records;
-      return records.filter(r => r.日時 && r.日時.startsWith(label));
+      return records.filter(r => r.日時 && getDatePart(r.日時).startsWith(label));
     }
 
     function updateMonthLabel() {
@@ -455,9 +456,12 @@
       // 日ごとの売上集計
       const byDay = {};
       allRecords.forEach(r => {
-        if (r.日時 && r.日時.startsWith(prefix)) {
-          const day = parseInt(r.日時.split('/')[2]);
-          byDay[day] = (byDay[day] || 0) + (r.合計金額 || 0);
+        if (r.日時) {
+          const dp = getDatePart(r.日時);
+          if (dp.startsWith(prefix)) {
+            const day = parseInt(dp.split('/')[2]);
+            if (!isNaN(day)) byDay[day] = (byDay[day] || 0) + (r.合計金額 || 0);
+          }
         }
       });
 
@@ -505,7 +509,7 @@
 
     function showDayDetail(dateStr) {
       const allRecords = loadRecords();
-      const dayRecords = allRecords.filter(r => r.日時 && r.日時.startsWith(dateStr));
+      const dayRecords = allRecords.filter(r => r.日時 && getDatePart(r.日時) === dateStr);
 
       const parts = dateStr.split('/');
       const title = parseInt(parts[1]) + '月' + parseInt(parts[2]) + '日のサマリー';
@@ -585,7 +589,7 @@
       const allRecords = loadRecords();
       const now = new Date();
       const todayStr = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0');
-      const todayRecords = allRecords.filter(r => r.日時 && r.日時.startsWith(todayStr));
+      const todayRecords = allRecords.filter(r => r.日時 && getDatePart(r.日時) === todayStr);
       const todaySales = todayRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
       const todayCount = todayRecords.length;
 
@@ -600,7 +604,9 @@
 
       const weekRecords = allRecords.filter(r => {
         if (!r.日時) return false;
-        const parts = r.日時.split(/[/ :]/);
+        const dp = getDatePart(r.日時);
+        const parts = dp.split('/');
+        if (parts.length < 3 || isNaN(parseInt(parts[0]))) return false;
         const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
         return d >= monday;
       });
@@ -612,13 +618,32 @@
     }
 
     // 日別売上グラフ
+    // 日時文字列を正規化 (様々なフォーマットに対応)
+    function normalizeDateTime(dt) {
+      if (!dt) return '';
+      const s = String(dt);
+      // 既に YYYY/MM/DD HH:MM 形式
+      if (/^\d{4}\/\d{2}\/\d{2}/.test(s)) return s;
+      // YYYY-MM-DDTHH:MM:SS or YYYY-MM-DD HH:MM:SS 形式
+      const m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return m[1] + '/' + m[2].padStart(2,'0') + '/' + m[3].padStart(2,'0') + ' ' + (s.split(/[T ]/)[1] || '00:00').substring(0,5);
+      return s;
+    }
+
+    function getDatePart(dt) {
+      const n = normalizeDateTime(dt);
+      return n.split(' ')[0]; // YYYY/MM/DD
+    }
+
     function renderDailyChart() {
       const records = getFilteredRecords();
       const byDate = {};
       records.forEach(r => {
         if (r.日時) {
-          const date = r.日時.split(' ')[0]; // 2026/03/03
-          byDate[date] = (byDate[date] || 0) + (r.合計金額 || 0);
+          const date = getDatePart(r.日時);
+          if (date && !date.includes('NaN')) {
+            byDate[date] = (byDate[date] || 0) + (r.合計金額 || 0);
+          }
         }
       });
       const dates = Object.keys(byDate).sort();
@@ -676,11 +701,14 @@
       const byHour = {};
       records.forEach(r => {
         if (r.日時) {
-          const timePart = r.日時.split(' ')[1];
+          const n = normalizeDateTime(r.日時);
+          const timePart = n.split(' ')[1];
           if (timePart) {
             const hour = parseInt(timePart.split(':')[0]);
-            const label = hour + '時台';
-            byHour[label] = (byHour[label] || 0) + 1;
+            if (!isNaN(hour)) {
+              const label = hour + '時台';
+              byHour[label] = (byHour[label] || 0) + 1;
+            }
           }
         }
       });
