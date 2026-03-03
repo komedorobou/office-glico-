@@ -417,22 +417,23 @@
       document.getElementById('today-sales').textContent = todaySales.toLocaleString() + '円';
       document.getElementById('today-count').textContent = todayCount + '件の購入';
 
-      // 昨日との比較
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yStr = yesterday.getFullYear() + '/' + String(yesterday.getMonth()+1).padStart(2,'0') + '/' + String(yesterday.getDate()).padStart(2,'0');
-      const yRecords = allRecords.filter(r => r.日時 && r.日時.startsWith(yStr));
-      const ySales = yRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
+      // 今週の売上（月曜始まり）
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+      monday.setHours(0, 0, 0, 0);
+
+      const weekRecords = allRecords.filter(r => {
+        if (!r.日時) return false;
+        const parts = r.日時.split(/[/ :]/);
+        const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+        return d >= monday;
+      });
+      const weekSales = weekRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
+      const weekCount = weekRecords.length;
 
       const compareEl = document.getElementById('today-compare');
-      if (ySales > 0) {
-        const diff = todaySales - ySales;
-        const pct = Math.round((diff / ySales) * 100);
-        const arrow = diff >= 0 ? '↑' : '↓';
-        compareEl.innerHTML = `<p>前日比</p><p class="text-lg font-bold">${arrow} ${Math.abs(pct)}%</p><p class="text-xs opacity-70">昨日: ${ySales.toLocaleString()}円</p>`;
-      } else {
-        compareEl.innerHTML = '<p class="text-xs opacity-70">昨日のデータなし</p>';
-      }
+      compareEl.innerHTML = `<p class="text-xs opacity-70">今週の合計</p><p class="text-lg font-bold">${weekSales.toLocaleString()}円</p><p class="text-xs opacity-70">${weekCount}件</p>`;
     }
 
     // 日別売上グラフ
