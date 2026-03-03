@@ -315,6 +315,7 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
       const records = getFilteredRecords();
       const totalSales = records.reduce((s, r) => s + (r.合計金額 || 0), 0);
       const totalCount = records.length;
+      const totalItems = records.reduce((s, r) => { let c = 0; prices.forEach(p => { c += (r[p + '円'] || 0); }); return s + c; }, 0);
 
       const priceBreakdown = {};
       prices.forEach(p => priceBreakdown[p] = 0);
@@ -333,8 +334,8 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
           <p class="text-2xl font-bold text-amber-800">${totalSales.toLocaleString()}円</p>
         </div>
         <div class="bg-amber-50 rounded-xl p-3 text-center">
-          <p class="text-sm text-slate-500">購入件数</p>
-          <p class="text-2xl font-bold text-amber-800">${totalCount}件</p>
+          <p class="text-sm text-slate-500">販売個数</p>
+          <p class="text-2xl font-bold text-amber-800">${totalItems}個</p>
         </div>
         <div class="col-span-2 bg-slate-50 rounded-xl p-3">
           <p class="text-sm text-slate-500 mb-2">価格帯別 個数</p>
