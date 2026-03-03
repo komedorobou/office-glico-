@@ -691,9 +691,11 @@
       const topDepts = Object.entries(byDept).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
       const byPerson = {};
+      const uniquePersons = new Set();
       records.forEach(r => {
         const key = r.氏名 || '不明';
         byPerson[key] = (byPerson[key] || 0) + (r.合計金額 || 0);
+        uniquePersons.add(r.職員番号 || r.氏名 || '不明');
       });
       const topBuyers = Object.entries(byPerson).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
@@ -729,7 +731,7 @@
         </div>
         <div class="bg-blue-50 rounded-xl p-3 text-center">
           <p class="text-sm text-slate-500">購入者数</p>
-          <p class="text-2xl font-bold text-blue-800">${Object.keys(byPerson).length}人</p>
+          <p class="text-2xl font-bold text-blue-800">${uniquePersons.size}人</p>
         </div>
         <div class="col-span-2 bg-slate-50 rounded-xl p-3">
           <p class="text-sm text-slate-500 mb-2">🏷 価格帯別 個数</p>
