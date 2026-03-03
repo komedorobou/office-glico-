@@ -214,11 +214,30 @@
     async function fetchRecordsFromServer() {
       try {
         const res = await fetch(GAS_URL);
-        const data = await res.json();
-        cachedRecords = data;
-        localStorage.setItem('glico_records', JSON.stringify(data));
-        recordsLoaded = true;
-        return data;
+        const serverData = await res.json();
+
+        // ローカルにあってサーバーにないデータを移行
+        const localData = cachedRecords.length > 0 ? cachedRecords : [];
+        if (serverData.length === 0 && localData.length > 0) {
+          // サーバーが空でローカルにデータがある→全件アップロード
+          console.log('ローカルデータをサーバーに移行中...', localData.length, '件');
+          for (const record of localData) {
+            await addRecordToServer(record);
+          }
+          recordsLoaded = true;
+          return localData;
+        } else if (serverData.length > 0) {
+          // サーバーにデータがある→サーバーを正とする
+          cachedRecords = serverData;
+          localStorage.setItem('glico_records', JSON.stringify(serverData));
+          recordsLoaded = true;
+          return serverData;
+        } else {
+          // 両方空
+          cachedRecords = [];
+          recordsLoaded = true;
+          return [];
+        }
       } catch(e) {
         console.error('サーバー読み込みエラー:', e);
         // フォールバック: localStorage から読み込み
