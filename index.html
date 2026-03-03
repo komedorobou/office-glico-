@@ -155,14 +155,79 @@
     const cart = {};
     prices.forEach(p => cart[p] = 0);
 
-    // localStorage
+    // Google Sheets API
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbwsk8I_pP8XDbz_XA3jjb7X9tQsmCo4df_fW7X1wa0eaXqef1aeEsAdr_mGAf6jhJZ8oA/exec';
+    let cachedRecords = [];
+    let recordsLoaded = false;
+
     function loadRecords() {
-      try { const d = localStorage.getItem('glico_records'); return d ? JSON.parse(d) : []; }
-      catch { return []; }
+      return cachedRecords;
     }
     function saveRecords(records) {
+      cachedRecords = records;
       localStorage.setItem('glico_records', JSON.stringify(records));
     }
+
+    // サーバーからデータ読み込み
+    async function fetchRecordsFromServer() {
+      try {
+        const res = await fetch(GAS_URL);
+        const data = await res.json();
+        cachedRecords = data;
+        localStorage.setItem('glico_records', JSON.stringify(data));
+        recordsLoaded = true;
+        return data;
+      } catch(e) {
+        console.error('サーバー読み込みエラー:', e);
+        // フォールバック: localStorage から読み込み
+        try { const d = localStorage.getItem('glico_records'); cachedRecords = d ? JSON.parse(d) : []; }
+        catch { cachedRecords = []; }
+        recordsLoaded = true;
+        return cachedRecords;
+      }
+    }
+
+    // サーバーにレコード追加
+    async function addRecordToServer(record) {
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'add', record: record })
+        });
+      } catch(e) { console.error('サーバー保存エラー:', e); }
+    }
+
+    // サーバーからレコード削除
+    async function deleteRecordFromServer(rid) {
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'delete', rid: rid })
+        });
+      } catch(e) { console.error('サーバー削除エラー:', e); }
+    }
+
+    // サーバーのデータクリア
+    async function clearRecordsFromServer(monthPrefix) {
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'clear', monthPrefix: monthPrefix || '' })
+        });
+      } catch(e) { console.error('サーバークリアエラー:', e); }
+    }
+
+    // 初回読み込み
+    (async () => {
+      // まずlocalStorageから即座に表示
+      try { const d = localStorage.getItem('glico_records'); cachedRecords = d ? JSON.parse(d) : []; }
+      catch { cachedRecords = []; }
+      // バックグラウンドでサーバーから最新取得
+      fetchRecordsFromServer();
+    })();
 
     // 月管理
     let selectedMonthIndex = 0; // 0 = 今月, 1 = 先月, ... , -1 = 全期間
@@ -268,6 +333,7 @@
         合計金額: getTotal()
       };
       const records = loadRecords(); records.push(record); saveRecords(records);
+      addRecordToServer(record);
       showScreen('done');
       setTimeout(() => {
         currentMember = null; staffIdInput.value = ''; resetCart();
@@ -396,6 +462,7 @@
       if (idx >= 0) {
         all.splice(idx, 1);
         saveRecords(all);
+        deleteRecordFromServer(rid);
         buildAvailableMonths();
         refreshOwner();
       }
@@ -434,11 +501,14 @@
       if (!confirm(monthText + ' の購入データ ' + filtered.length + '件 をすべて削除しますか？\nこの操作は取り消せません。\n\n※先にExcel出力することをおすすめします')) return;
 
       if (label === '全期間') {
+        cachedRecords = [];
         localStorage.removeItem('glico_records');
+        clearRecordsFromServer('');
       } else {
         const all = loadRecords();
         const remaining = all.filter(r => !(r.日時 && r.日時.startsWith(label)));
         saveRecords(remaining);
+        clearRecordsFromServer(label);
       }
       buildAvailableMonths();
       selectedMonthIndex = 0;
