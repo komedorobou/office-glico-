@@ -113,6 +113,20 @@
         <button id="btn-owner-exit" class="px-4 py-2 bg-slate-500 text-white font-bold rounded-xl hover:bg-slate-600 transition text-sm">戻る</button>
       </div>
 
+      <!-- カレンダー -->
+      <div class="bg-white rounded-2xl shadow-lg p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <button id="btn-cal-prev" class="w-8 h-8 bg-slate-200 text-lg font-bold rounded-full hover:bg-slate-300 transition">＜</button>
+          <h2 id="cal-title" class="font-bold text-slate-700 text-lg">📅</h2>
+          <button id="btn-cal-next" class="w-8 h-8 bg-slate-200 text-lg font-bold rounded-full hover:bg-slate-300 transition">＞</button>
+        </div>
+        <div class="grid grid-cols-7 gap-1 text-center text-xs text-slate-400 mb-1">
+          <span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="text-blue-400">土</span><span class="text-red-400">日</span>
+        </div>
+        <div id="cal-grid" class="grid grid-cols-7 gap-1"></div>
+        <div id="cal-day-detail" class="mt-3 hidden"></div>
+      </div>
+
       <!-- 月選択 -->
       <div class="bg-white rounded-2xl shadow-lg p-4 mb-4">
         <div class="flex items-center justify-between">
@@ -386,9 +400,99 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
 
     function refreshOwner() {
       updateMonthLabel();
+      renderCalendar();
       renderSummary();
       renderAgeAnalysis();
       renderHistory();
+    }
+
+    // ====== カレンダー ======
+    let calYear, calMonth;
+    (() => { const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth(); })();
+
+    document.getElementById('btn-cal-prev').addEventListener('click', () => {
+      calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+      renderCalendar();
+    });
+    document.getElementById('btn-cal-next').addEventListener('click', () => {
+      calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+      renderCalendar();
+    });
+
+    function renderCalendar() {
+      document.getElementById('cal-title').textContent = '📅 ' + calYear + '年' + (calMonth + 1) + '月';
+      document.getElementById('cal-day-detail').classList.add('hidden');
+
+      const allRecords = loadRecords();
+      // 日別売上集計
+      const dailySales = {};
+      allRecords.forEach(r => {
+        const d = getDatePart(r.日時);
+        if (d) dailySales[d] = (dailySales[d] || 0) + (r.合計金額 || 0);
+      });
+
+      const firstDay = new Date(calYear, calMonth, 1);
+      let startDow = firstDay.getDay(); // 0=日
+      startDow = startDow === 0 ? 6 : startDow - 1; // 月曜始まり
+      const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+
+      // 当月の最大売上（ヒートマップ用）
+      let maxSale = 0;
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = calYear + '/' + String(calMonth + 1).padStart(2, '0') + '/' + String(d).padStart(2, '0');
+        if ((dailySales[key] || 0) > maxSale) maxSale = dailySales[key];
+      }
+
+      let html = '';
+      // 空白セル
+      for (let i = 0; i < startDow; i++) html += '<div class="h-10"></div>';
+      // 日セル
+      for (let d = 1; d <= daysInMonth; d++) {
+        const key = calYear + '/' + String(calMonth + 1).padStart(2, '0') + '/' + String(d).padStart(2, '0');
+        const sale = dailySales[key] || 0;
+        const intensity = maxSale > 0 ? Math.min(sale / maxSale, 1) : 0;
+        const bg = sale > 0
+          ? 'background:rgba(22,163,74,' + (0.15 + intensity * 0.7) + ')'
+          : '';
+        const textColor = intensity > 0.5 ? 'color:white' : '';
+        const today = new Date();
+        const isToday = (calYear === today.getFullYear() && calMonth === today.getMonth() && d === today.getDate());
+        const ring = isToday ? 'ring-2 ring-amber-400' : '';
+        html += '<div class="h-10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:ring-2 hover:ring-slate-300 text-xs ' + ring + '" style="' + bg + ';' + textColor + '" onclick="showDayDetail(\'' + key + '\')">';
+        html += '<span class="font-bold">' + d + '</span>';
+        if (sale > 0) html += '<span style="font-size:0.6rem">' + (sale >= 1000 ? Math.round(sale / 1000) + 'k' : sale) + '</span>';
+        html += '</div>';
+      }
+      document.getElementById('cal-grid').innerHTML = html;
+    }
+
+    function showDayDetail(dateStr) {
+      const allRecords = loadRecords();
+      const dayRecords = allRecords.filter(r => getDatePart(r.日時) === dateStr);
+      const el = document.getElementById('cal-day-detail');
+
+      if (dayRecords.length === 0) {
+        el.innerHTML = '<p class="text-center text-slate-400 text-sm py-2">' + dateStr + ' の購入なし</p>';
+        el.classList.remove('hidden');
+        return;
+      }
+
+      const totalSales = dayRecords.reduce((s, r) => s + (r.合計金額 || 0), 0);
+      const totalItems = dayRecords.reduce((s, r) => { let c = 0; prices.forEach(p => { c += (r[p + '円'] || 0); }); return s + c; }, 0);
+
+      let html = '<div class="bg-green-50 rounded-xl p-3">';
+      html += '<div class="flex justify-between items-center mb-2"><span class="font-bold text-green-800">' + dateStr + '</span>';
+      html += '<span class="text-sm text-green-600">' + totalSales.toLocaleString() + '円 / ' + totalItems + '個</span></div>';
+      html += '<div class="space-y-1">';
+      dayRecords.forEach(r => {
+        const items = prices.filter(p => (r[p + '円'] || 0) > 0).map(p => p + '円×' + r[p + '円']).join(' ');
+        const time = r.日時 ? r.日時.split(' ')[1] || '' : '';
+        html += '<div class="flex justify-between text-sm"><span class="text-slate-600">' + time + ' ' + r.氏名 + ' <span class="text-slate-400">' + items + '</span></span>';
+        html += '<span class="font-bold text-green-700">' + (r.合計金額 || 0) + '円</span></div>';
+      });
+      html += '</div></div>';
+      el.innerHTML = html;
+      el.classList.remove('hidden');
     }
 
     // 月切り替え
