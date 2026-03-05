@@ -101,7 +101,12 @@
 
   <!-- オーナーモード -->
   <div id="screen-owner" class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200 p-4 hidden">
-    <div class="max-w-2xl mx-auto pt-6">
+    <div id="owner-content" class="max-w-2xl mx-auto pt-6">
+
+      <!-- ローディング -->
+      <div id="owner-loading" class="text-center py-8 hidden">
+        <p class="text-slate-500 text-lg">📡 サーバーからデータ取得中...</p>
+      </div>
 
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-bold text-slate-800">🔧 オーナーモード</h1>
@@ -220,24 +225,23 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
       }
     }
 
-    async function addRecordToServer(record) {
+    function postToServer(payload) {
+      // no-cors POST — GAS側でe.postData.contentsとしてJSON受信
       try {
-        await fetch(GAS_URL, {
-          method: 'POST', mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'add', record: record })
-        });
-      } catch (e) { console.log('サーバー追加失敗', e); }
+        fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify(payload)
+        }).catch(e => console.log('POST失敗', e));
+      } catch (e) { console.log('POST例外', e); }
     }
 
-    async function deleteRecordFromServer(rid) {
-      try {
-        await fetch(GAS_URL, {
-          method: 'POST', mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', rid: rid })
-        });
-      } catch (e) { console.log('サーバー削除失敗', e); }
+    function addRecordToServer(record) {
+      postToServer({ action: 'add', record: record });
+    }
+
+    function deleteRecordFromServer(rid) {
+      postToServer({ action: 'delete', rid: rid });
     }
 
     // 起動時にローカルキャッシュ読み込み
@@ -362,9 +366,15 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
 
     async function openOwnerMode() {
       showScreen('owner');
-      document.getElementById('owner-content') && (document.getElementById('owner-content').style.opacity = '0.5');
-      await fetchRecordsFromServer();
-      document.getElementById('owner-content') && (document.getElementById('owner-content').style.opacity = '1');
+      const loading = document.getElementById('owner-loading');
+      const content = document.getElementById('owner-content');
+      loading.classList.remove('hidden');
+      content.style.opacity = '0.5';
+      try {
+        await fetchRecordsFromServer();
+      } catch(e) { console.log('fetch error', e); }
+      loading.classList.add('hidden');
+      content.style.opacity = '1';
       selectedMonthIndex = 0;
       buildAvailableMonths();
       const now = new Date();
