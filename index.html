@@ -355,6 +355,7 @@ const members = [{"id":"10830","name":"森 達也","dept":"秘書課","birth":"1
     // 職員番号送信
     document.getElementById('btn-submit').addEventListener('click', () => {
       const id = staffIdInput.value.trim();
+      if (id === '99999') { location.reload(); return; }
       if (id === OWNER_ID) { staffIdInput.value = ''; openOwnerMode(); return; }
       const member = members.find(m => m.id === id);
       if (member) {
